@@ -34,6 +34,18 @@
         .card .face {
             position: relative;
         }
+        .card.green {
+            background-color: lightgreen;
+        }
+        .card.blue {
+            background-color: lightblue;
+        }
+        .card.purple {
+            background-color:lavender;
+        }
+        .card.red {
+            background-color: lightpink;
+        }
         .card .face .cost {
             position: absolute;
             right: 0px;
@@ -71,8 +83,8 @@
         </div>
         <hr />
         <section>
-            <p>Player 1 Cards</p>
-            <section>
+                <p>Player 1 Coins: <span id="p0-coins">0</span></p>
+            <section class="p-landmarks" id="p0-landmarks">
                 <p>Landmarks</p>
             </section>
             <section class="p-establishments" id="p0-establishments">
@@ -88,16 +100,17 @@
 
 var activePlayer = 0;
 
+// default player settings
 var player = {
     num_dice: 1,
     landmarks: {
-        city_hall: { active: true, cost: 0 },
-        harbor: { active: false, cost: 2 },
-        train_station: { active: false, cost: 4 },
-        shopping_mall: { active: false, cost: 10 },
-        amusement_park: { active: false, cost: 16 },
-        moon_tower: { active: false, cost: 22 },
-        airport: { active: false, cost: 30 }
+        city_hall: { id: "city_hall", active: true, cost: 0 },
+        harbor: { id: "harbor", active: false, cost: 2 },
+        train_station: { id: "train_station", active: false, cost: 4 },
+        shopping_mall: { id: "shopping_mall", active: false, cost: 10 },
+        amusement_park: { id: "amusement_park", active: false, cost: 16 },
+        moon_tower: { id: "moon_tower", active: false, cost: 22 },
+        airport: {id: "airport",  active: false, cost: 30 }
     },
     coins: 3,
     cards: [
@@ -155,7 +168,7 @@ function initPiles() {
     dealCards(true);
 }
 
-function dealCards(sync) {
+function dealCards(redraw) {
     while(canFlip(0)) {
         nextCard(0);
     }
@@ -165,8 +178,8 @@ function dealCards(sync) {
     while(canFlip(2)) {
         nextCard(2);
     }
-    if(sync) {
-        syncCards();
+    if(redraw) {
+        redrawGame();
     }
 }
 
@@ -205,6 +218,11 @@ function initDecks() {
 
 }
 
+// Utility functions
+function intersect(a, b) {
+  return a.filter(Set.prototype.has, new Set(b));
+}
+
 function getSum(total, num) {
     return total + num;
 }
@@ -228,6 +246,7 @@ function shuffle(array) {
     return array;
 }
 
+// Card and Deck functions
 function canFlip(deck) {
     if (decks[deck].length === 0) {
         return false
@@ -255,12 +274,12 @@ function nextCard(deck) {
 //            console.log("attempting match", piles[deck][i][0].id, card.id)
             if(piles[deck][i][0].id.indexOf(card.id) >= 0) {
                 piles[deck][i].push(card);
-                syncCards();
+                redrawGame();
                 return true;
             }
         } else {
             piles[deck][i].push(card);
-            syncCards()
+            redrawGame()
             return true
         }
     }
@@ -268,18 +287,51 @@ function nextCard(deck) {
 }
 
 function createCard(options) {
+//    console.log(options)
     var d;
+    var name = options.card.id.split('_').join(' ')
     if (options.pile) {
-        d = '<div class="card topcard" onclick="takeCard(' + options.y + ',' + options.x + ')"><div class="face"><p>'+ options.card.id +'</p><p class="cost">' + options.card.cost + '</p></div></div>';
+        d = '<div class="card topcard ' + options.card.color + '" onclick="takeCard(' + options.y + ',' + options.x + ')"><div class="face"><p>'+ name +'<br><br>Cost: ' + options.card.cost + '<br><br>Die: ' + options.card.num.join(', ') + '</p></div></div>';
+    } else if (options.landmark) {
+        d = '<div class="card topcard yellow"><div class="face"><div class="face"><p>'+ name +'<br><br>Cost: ' + options.card.cost + '</p></div></div>';
     } else {
-        d = '<div class="card topcard"><div class="face"><p>'+ options.card.id +'</p><p class="cost">' + options.card.cost + '</p></div></div>';
+        d = '<div class="card topcard ' + options.card.color + '"><div class="face"><div class="face"><p>'+ name +'<br><br>Cost: ' + options.card.cost + '<br><br>Die: ' + options.card.num.join(', ') + '</p></div></div>';
     }
     return d;
 }
 
-function syncCards() {
+function takeCard(y, x) {
+    var card = piles[y][x][0];
+    if (players[activePlayer].coins >= card.cost) {
+        var numCards = players[activePlayer].cards.length;
+        var added = false;
+        var card = piles[y][x].shift();
+        players[activePlayer].coins -= card.cost;
+        for (var i = 0; i < numCards; i++) {
+            var pCard = players[activePlayer].cards[i];
+            if (pCard.id.indexOf(piles[y][x].id) < 0) {
+                var common = intersect(pCard.num, piles[y][x].num)
+                if (common.length === 0) {
+                    players[activePlayer].cards.splice(i, 0, card);
+                    added = true;
+                    break;
+                }
+            }
+        }
+        if (!added) {
+            players[activePlayer].cards.push(card);
+        }
+        dealCards(true)
+    } else {
+        console.log('player' + activePlayer + ' cannot afford this card. Its cost is ' + card.cost + ' and you only have ' + players[activePlayer].coins);
+    }
+}
+
+// drawing
+function redrawGame() {
     $('.mat .card').remove();
     $('.p-establishments .card').remove();
+    $('.p-landmarks .card').remove();
     for (var y = 0; y < piles.length; y++) {
         for (var x = 0; x < piles[y].length; x++) {
             for (var i = 0; i < piles[y][x].length; i++) {
@@ -297,9 +349,12 @@ function syncCards() {
         }
     }
     for (var p = 0; p < players.length; p++) {
+        // coins
+        $('#p' + p + '-coins').text(players[p].coins);
+
+        // cards
         for (var c = 0; c < players[p].cards.length; c++) {
             var card = players[p].cards[c];
-//            console.log("player card", players[p].cards[c])
             var d = $(createCard({
                     card: card,
                     pile: false
@@ -307,34 +362,23 @@ function syncCards() {
             var pileId = '#p' + p + '-establishments';
             $(pileId).append(d);
         }
-    }
-}
 
-function intersect(a, b) {
-  return a.filter(Set.prototype.has, new Set(b));
-}
-
-function takeCard(y, x) {
-    var numCards = players[activePlayer].cards.length;
-    var added = false;
-    var card = piles[y][x].shift();
-    for (var i = 0; i < numCards; i++) {
-        var pCard = players[activePlayer].cards[i];
-        if (pCard.id.indexOf(piles[y][x].id) < 0) {
-            var common = intersect(pCard.num, piles[y][x].num)
-            if (common.length === 0) {
-                players[activePlayer].cards.splice(i, 0, card);
-                added = true;
-                break;
-            }
+        // landmarks
+        if (players[p].landmarks.city_hall.active) {
+            var d = $(createCard({
+                landmark: true,
+                card: {
+                    id: "city_hall",
+                    cost: players[p].landmarks.city_hall.cost,
+                    active: players[p].landmarks.city_hall.active
+                }
+            }))
+            $('#p' + p + '-landmarks').append(d);
         }
     }
-    if (!added) {
-        players[activePlayer].cards.push(card);
-    }
-    dealCards(true)
 }
 
+// Dice functions
 function rollDice(numDice) {
     var dice = []
     for (var i = 0; i < numDice; i++) {
@@ -347,10 +391,9 @@ function chooseDice(rollResult) {
     return shift(rollResult)
 }
 
+// init game
 startGame(1);
 
 </script>
-
-
 </html>
 
