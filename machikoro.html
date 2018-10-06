@@ -1,0 +1,356 @@
+<html>
+    <link rel="stylesheet" href="reset.css">
+    <style>
+        .deck {
+            background-color:lightcyan;
+        }
+        .pile {
+            background-color:dimgray;
+        }
+        .pile, .deck, .card {
+            width: 140px;
+            height: 180px;
+            float: left;
+            padding: 0;
+            margin: 0;
+        }
+        .pile, .deck {
+            margin: 5px;
+            position: relative;
+        }
+        .mat .pile .card {
+            position: absolute;
+            left: 0;
+            right: 0;
+        }
+        section {
+            clear: both;
+            min-height: 190px;
+        }
+        .card {
+            background-color:lavender;
+            z-index: 300;
+        }
+        .card .face {
+            position: relative;
+        }
+        .card .face .cost {
+            position: absolute;
+            right: 0px;
+            bottom: 0px;
+        }
+        .topcard {
+            z-index: 0;
+        }
+        .p-establishments .card {
+            margin-right: 5;
+        }
+    </style>
+    <body>
+        <h2>Machi Koro</h2>
+        <div class="mat">
+            <section>
+                <div class="deck" id="deck0" onclick="nextCard(0)">&lt;=6</div>
+                <div class="pile" id="pile0-0"></div>
+                <div class="pile" id="pile0-1"></div>
+                <div class="pile" id="pile0-2"></div>
+                <div class="pile" id="pile0-3"></div>
+            </section>
+            <section>
+                <div class="deck" id="deck1" onclick="nextCard(1)">&gt;=7</div>
+                <div class="pile" id="pile1-0"></div>
+                <div class="pile" id="pile1-1"></div>
+                <div class="pile" id="pile1-2"></div>
+                <div class="pile" id="pile1-3"></div>
+            </section>
+            <section>
+                <div class="deck" id="deck2" onclick="nextCard(2)">P</div>
+                <div class="pile" id="pile2-0"></div>
+                <div class="pile" id="pile2-1"></div>
+            </section>
+        </div>
+        <hr />
+        <section>
+            <p>Player 1 Cards</p>
+            <section>
+                <p>Landmarks</p>
+            </section>
+            <section class="p-establishments" id="p0-establishments">
+                <p>Establishments</p>
+            </section>
+        </section>
+    </body>
+
+    <script type="text/javascript" src="jquery-3.3.1.min.js"></script>
+    
+
+<script>
+
+var activePlayer = 0;
+
+var player = {
+    num_dice: 1,
+    landmarks: {
+        city_hall: { active: true, cost: 0 },
+        harbor: { active: false, cost: 2 },
+        train_station: { active: false, cost: 4 },
+        shopping_mall: { active: false, cost: 10 },
+        amusement_park: { active: false, cost: 16 },
+        moon_tower: { active: false, cost: 22 },
+        airport: { active: false, cost: 30 }
+    },
+    coins: 3,
+    cards: [
+        { num: [1],     id: "wheat_field",   cost: 1,    color: "blue",      industry: "farm",         value: 1 },
+        { num: [2,3],   id: "bakery",        cost: 1,    color: "green",     industry: "shop",         value: 1 }
+    ]
+}
+
+var cards = [
+{ num: [1],       id: "wheat_field",          cost: 1,    color: "blue",      industry: "farm",           value: 1,   supply: 6 },
+{ num: [1],       id: "sushi_bar",            cost: 4,    color: "red",       industry: "restaurant",     value: 1,   supply: 6 },
+{ num: [2],       id: "ranch",                cost: 1,    color: "blue",      industry: "cow",            value: 1,   supply: 6 },
+{ num: [2,3],   id: "bakery",               cost: 1,    color: "green",     industry: "shop",           value: 1,   supply: 6 },
+{ num: [3],       id: "cafe",                 cost: 2,    color: "red",       industry: "restaurant",     value: 1,   supply: 6 },
+{ num: [4],       id: "flower_orchard",       cost: 2,    color: "blue",      industry: "floral",         value: 1,   supply: 6 },
+{ num: [5],       id: "forest",               cost: 3,    color: "blue",      industry: "mech",           value: 1,   supply: 6 },
+{ num: [6],       id: "flower_shop",          cost: 1,    color: "green",     industry: "floral",         value: 1,   supply: 6, sources: "floral" },
+{ num: [6],       id: "stadium",              cost: 6,    color: "purple",    industry: "",               value: 2,   supply: 6 },
+{ num: [7],       id: "pizza_joint",          cost: 1,    color: "red",       industry: "restaurant",     value: 1,   supply: 6,  sources: "cow" },
+{ num: [7],       id: "cheese_factory",       cost: 5,    color: "green",     industry: "cow",            value: 1,   supply: 6,  sources: "" },
+{ num: [7],       id: "publisher",            cost: 5,    color: "purple",    industry: "",               value: 1,   supply: 6,  sources: ["restaurant, shop"], other_players: true },
+{ num: [8],       id: "furniture_factory",    cost: 3,    color: "green",     industry: "mech",           value: 1,   supply: 6,  sources: "mech" },
+{ num: [8],       id: "mackeral_boat",        cost: 2,    color: "blue",      industry: "boat",           value: 3,   supply: 6,  sources: "mech", requires: "harbor" },
+{ num: [8,9],   id: "tax_office",           cost: 4,    color: "purple",    industry: "",               value: 0.5, supply: 6,  sources: "", other_players: true, minimum_coins: 10 },
+{ num: [9,10],  id: "family_restaurant",    cost: 3,    color: "red",       industry: "restaurant",     value: 2,   supply: 6 },
+{ num: [10],      id: "apple_orchard",        cost: 3,    color: "green",     industry: "cow",            value: 1,   supply: 6,  sources: "cow" },
+{ num: [11,12], id: "fruit_and_vegetable_market", cost: 2,  color: "green",     industry: "factory",    value: 2,   supply: 6,  sources: "restaurant" },
+{ num: [12,13], id: "food_warehouse",       cost: 2,    color: "green",     industry: "factory",        value: 2,   supply: 6,  sources: "restaurant" },
+{ num: [12,13,14], id: "tuna_boat",         cost: 5,    color: "blue",      industry: "ship",           value: "s", supply: 6, requires: "harbor" }
+]
+
+var players = []
+var decks = []
+var piles = []
+
+function startGame(numPlayers) {
+    initPlayers(numPlayers)
+    initDecks()
+    initPiles()
+}
+
+function initPlayers(numPlayers) {
+    players = []
+    for (var i = 0; i < numPlayers; i++) {
+        players.push(player)
+    }
+}
+
+function initPiles() {
+    piles = []
+    piles.push([[],[],[],[]])
+    piles.push([[],[],[],[]])
+    piles.push([[],[]])
+
+    dealCards(true);
+}
+
+function dealCards(sync) {
+    while(canFlip(0)) {
+        nextCard(0);
+    }
+    while(canFlip(1)) {
+        nextCard(1);
+    }
+    while(canFlip(2)) {
+        nextCard(2);
+    }
+    if(sync) {
+        syncCards();
+    }
+}
+
+function initDecks() {
+    decks = []
+    decks = [[],[],[]]
+
+    var numCards = cards.length;
+    for (var i = 0; i < numCards; i++) {
+        if (cards[i].num.reduce(getSum) <= 6 && cards[i].color.indexOf("purple") < 0) {
+            for (var n = 0; n < cards[i].supply; n++) {
+                decks[0].push(cards[i])
+            }            
+        }
+        else if (cards[i].color.indexOf("purple") < 0) {
+            for (var n = 0; n < cards[i].supply; n++) {
+                decks[1].push(cards[i])
+            }            
+        }
+        else {
+            for (var n = 0; n < cards[i].supply; n++) {
+                decks[2].push(cards[i])
+            }            
+        }
+    }
+
+//    console.log("decks pre shuffle", decks)
+
+    for (i = 0; i < decks.length; i++) {
+        var deck = decks[i];
+        shuffle(deck)
+        decks[i] = deck;
+    }
+
+//    console.log("decks post shuffle", decks)
+
+}
+
+function getSum(total, num) {
+    return total + num;
+}
+
+function shuffle(array) {
+    var currentIndex = array.length, temporaryValue, randomIndex;
+  
+    // While there remain elements to shuffle...
+    while (0 !== currentIndex) {
+  
+      // Pick a remaining element...
+      randomIndex = Math.floor(Math.random() * currentIndex);
+      currentIndex -= 1;
+  
+      // And swap it with the current element.
+      temporaryValue = array[currentIndex];
+      array[currentIndex] = array[randomIndex];
+      array[randomIndex] = temporaryValue;
+    }
+  
+    return array;
+}
+
+function canFlip(deck) {
+    if (decks[deck].length === 0) {
+        return false
+    }
+
+    // see if there's an open spot in the piles
+    for (var i = 0; i < piles[deck].length; i++) {
+        if (piles[deck][i].length == 0) {
+            return true
+        }
+    }
+      
+    return false
+}
+
+function nextCard(deck) {
+    if(!canFlip(deck)) {
+        console.log("can't flip, piles are full.")
+        return false
+    }
+
+    var card = decks[deck].shift();
+    for (var i = 0; i < piles[deck].length; i++) {
+        if (piles[deck][i].length > 0) {
+//            console.log("attempting match", piles[deck][i][0].id, card.id)
+            if(piles[deck][i][0].id.indexOf(card.id) >= 0) {
+                piles[deck][i].push(card);
+                syncCards();
+                return true;
+            }
+        } else {
+            piles[deck][i].push(card);
+            syncCards()
+            return true
+        }
+    }
+    return false
+}
+
+function createCard(options) {
+    var d;
+    if (options.pile) {
+        d = '<div class="card topcard" onclick="takeCard(' + options.y + ',' + options.x + ')"><div class="face"><p>'+ options.card.id +'</p><p class="cost">' + options.card.cost + '</p></div></div>';
+    } else {
+        d = '<div class="card topcard"><div class="face"><p>'+ options.card.id +'</p><p class="cost">' + options.card.cost + '</p></div></div>';
+    }
+    return d;
+}
+
+function syncCards() {
+    $('.mat .card').remove();
+    $('.p-establishments .card').remove();
+    for (var y = 0; y < piles.length; y++) {
+        for (var x = 0; x < piles[y].length; x++) {
+            for (var i = 0; i < piles[y][x].length; i++) {
+//                console.log("card " + y + "," + x + "," + i + ": ", piles[y][x][i])
+                var card = piles[y][x][i];
+                var d = $(createCard({
+                    y: y,
+                    x: x,
+                    card: card,
+                    pile: true
+                }));
+                var pileId = '#pile' + y + '-' + x
+                $(pileId).append(d);
+            }
+        }
+    }
+    for (var p = 0; p < players.length; p++) {
+        for (var c = 0; c < players[p].cards.length; c++) {
+            var card = players[p].cards[c];
+//            console.log("player card", players[p].cards[c])
+            var d = $(createCard({
+                    card: card,
+                    pile: false
+                }));
+            var pileId = '#p' + p + '-establishments';
+            $(pileId).append(d);
+        }
+    }
+}
+
+function intersect(a, b) {
+  return a.filter(Set.prototype.has, new Set(b));
+}
+
+function takeCard(y, x) {
+    var numCards = players[activePlayer].cards.length;
+    var added = false;
+    var card = piles[y][x].shift();
+    for (var i = 0; i < numCards; i++) {
+        var pCard = players[activePlayer].cards[i];
+        if (pCard.id.indexOf(piles[y][x].id) < 0) {
+            var common = intersect(pCard.num, piles[y][x].num)
+            if (common.length === 0) {
+                players[activePlayer].cards.splice(i, 0, card);
+                added = true;
+                break;
+            }
+        }
+    }
+    if (!added) {
+        players[activePlayer].cards.push(card);
+    }
+    dealCards(true)
+}
+
+function rollDice(numDice) {
+    var dice = []
+    for (var i = 0; i < numDice; i++) {
+        dice += Math.floor(Math.random() * ((6 - 1) + 1) + 1)
+    }
+    return dice
+}
+
+function chooseDice(rollResult) {
+    return shift(rollResult)
+}
+
+startGame(1);
+
+</script>
+
+
+</html>
+
