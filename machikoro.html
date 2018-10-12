@@ -1,6 +1,10 @@
 <html>
     <link rel="stylesheet" href="reset.css">
     <style>
+        .left { float: left; width: 45%; }
+        .right { float: right; width: 45%; }
+        .clear { clear: both; }
+
         .deck {
             background-color:lightcyan;
         }
@@ -8,8 +12,8 @@
             background-color:dimgray;
         }
         .pile, .deck, .card {
-            width: 140px;
-            height: 180px;
+            width: 80px;
+            height: 120px;
             float: left;
             padding: 0;
             margin: 0;
@@ -25,7 +29,7 @@
         }
         section {
             clear: both;
-            min-height: 190px;
+            min-height: 130px;
         }
         .card {
             background-color:lavender;
@@ -54,12 +58,62 @@
         .topcard {
             z-index: 0;
         }
+        .card-count {
+            position: absolute;
+            right: 0;
+            top: 0;
+            background-color: gray;
+            color: white;
+            border-radius: 50%;
+            padding: 2px;
+        }
         .p-establishments .card {
             margin-right: 5;
+        }
+        .p-landmarks {
+            min-height:80px;
+        }
+        .p-landmarks .card {
+            height: 50px;
+        }
+        .dice .die {
+            float: left;
+            width: 30px;
+            height: 30px;
+            border: 1px solid black;
+        }
+        .right-side {
+            position: absolute;
+            right: 0;
+            top: 0;
+            width: 200px;
+            min-height: 200px;
+            height: 200px;
+        }
+        .dice-area {
+            position: relative;
+        }
+        #msgbox {
+            border: 1px solid black;
+            position: relative;
+            min-height: 200px;
+            height: 200px;
         }
     </style>
     <body>
         <h2>Machi Koro</h2>
+        <div class="right-side">
+            <div class="dice-area">
+                <input type="button" onclick="onRoll()" value="Roll" />
+                <div class="dice">
+                    <div id="die1" class="die"></div>
+                    <div id="die2" class="die"></div>
+                    <div id="die3" class="die"></div>
+                    <div class="clear"></div>
+                </div>
+            </div>
+            <textarea id="msgbox"></textarea>
+        </div>
         <div class="mat">
             <section>
                 <div class="deck" id="deck0" onclick="nextCard(0)">&lt;=6</div>
@@ -82,15 +136,7 @@
             </section>
         </div>
         <hr />
-        <section>
-                <p>Player 1 Coins: <span id="p0-coins">0</span></p>
-            <section class="p-landmarks" id="p0-landmarks">
-                <p>Landmarks</p>
-            </section>
-            <section class="p-establishments" id="p0-establishments">
-                <p>Establishments</p>
-            </section>
-        </section>
+        <div id="player-sections"></div>
     </body>
 
     <script type="text/javascript" src="jquery-3.3.1.min.js"></script>
@@ -98,48 +144,34 @@
 
 <script>
 
+var RED_CARD = 0;
+var BLUE_CARD = 1;
+var GREEN_CARD = 2;
+var PURPLE_CARD = 3;
+
 var activePlayer = 0;
 
-// default player settings
-var player = {
-    num_dice: 1,
-    landmarks: {
-        city_hall: { id: "city_hall", active: true, cost: 0 },
-        harbor: { id: "harbor", active: false, cost: 2 },
-        train_station: { id: "train_station", active: false, cost: 4 },
-        shopping_mall: { id: "shopping_mall", active: false, cost: 10 },
-        amusement_park: { id: "amusement_park", active: false, cost: 16 },
-        moon_tower: { id: "moon_tower", active: false, cost: 22 },
-        airport: {id: "airport",  active: false, cost: 30 }
-    },
-    coins: 3,
-    cards: [
-        { num: [1],     id: "wheat_field",   cost: 1,    color: "blue",      industry: "farm",         value: 1 },
-        { num: [2,3],   id: "bakery",        cost: 1,    color: "green",     industry: "shop",         value: 1 }
-    ]
-}
-
 var cards = [
-{ num: [1],        id: "wheat_field",          cost: 1,    color: "blue",      industry: "farm",           value: 1,   supply: 6 },
-{ num: [1],        id: "sushi_bar",            cost: 4,    color: "red",       industry: "restaurant",     value: 1,   supply: 6 },
-{ num: [2],        id: "ranch",                cost: 1,    color: "blue",      industry: "cow",            value: 1,   supply: 6 },
-{ num: [2,3],      id: "bakery",               cost: 1,    color: "green",     industry: "shop",           value: 1,   supply: 6 },
-{ num: [3],        id: "cafe",                 cost: 2,    color: "red",       industry: "restaurant",     value: 1,   supply: 6 },
-{ num: [4],        id: "flower_orchard",       cost: 2,    color: "blue",      industry: "floral",         value: 1,   supply: 6 },
-{ num: [5],        id: "forest",               cost: 3,    color: "blue",      industry: "mech",           value: 1,   supply: 6 },
-{ num: [6],        id: "flower_shop",          cost: 1,    color: "green",     industry: "floral",         value: 1,   supply: 6, sources: "floral" },
-{ num: [6],        id: "stadium",              cost: 6,    color: "purple",    industry: "",               value: 2,   supply: 6 },
-{ num: [7],        id: "pizza_joint",          cost: 1,    color: "red",       industry: "restaurant",     value: 1,   supply: 6,  sources: "cow" },
-{ num: [7],        id: "cheese_factory",       cost: 5,    color: "green",     industry: "cow",            value: 1,   supply: 6,  sources: "" },
-{ num: [7],        id: "publisher",            cost: 5,    color: "purple",    industry: "",               value: 1,   supply: 6,  sources: ["restaurant, shop"], other_players: true },
-{ num: [8],        id: "furniture_factory",    cost: 3,    color: "green",     industry: "mech",           value: 1,   supply: 6,  sources: "mech" },
-{ num: [8],        id: "mackeral_boat",        cost: 2,    color: "blue",      industry: "boat",           value: 3,   supply: 6,  sources: "mech", requires: "harbor" },
-{ num: [8,9],      id: "tax_office",           cost: 4,    color: "purple",    industry: "",               value: 0.5, supply: 6,  sources: "", other_players: true, minimum_coins: 10 },
-{ num: [9,10],     id: "family_restaurant",    cost: 3,    color: "red",       industry: "restaurant",     value: 2,   supply: 6 },
-{ num: [10],       id: "apple_orchard",        cost: 3,    color: "green",     industry: "cow",            value: 1,   supply: 6,  sources: "cow" },
-{ num: [11,12],    id: "fruit_and_vegetable_market", cost: 2,  color: "green",     industry: "factory",    value: 2,   supply: 6,  sources: "restaurant" },
-{ num: [12,13],    id: "food_warehouse",       cost: 2,    color: "green",     industry: "factory",        value: 2,   supply: 6,  sources: "restaurant" },
-{ num: [12,13,14], id: "tuna_boat",            cost: 5,    color: "blue",      industry: "ship",           value: "s", supply: 6, requires: "harbor" }
+{ num: [1],        id: "wheat_field",          cost: 1,    color: BLUE_CARD,      industry: "farm",           value: 1,   supply: 6 },
+{ num: [1],        id: "sushi_bar",            cost: 4,    color: RED_CARD,       industry: "restaurant",     value: 1,   supply: 6 },
+{ num: [2],        id: "ranch",                cost: 1,    color: BLUE_CARD,      industry: "cow",            value: 1,   supply: 6 },
+{ num: [2,3],      id: "bakery",               cost: 1,    color: GREEN_CARD,     industry: "shop",           value: 1,   supply: 6 },
+{ num: [3],        id: "cafe",                 cost: 2,    color: RED_CARD,       industry: "restaurant",     value: 1,   supply: 6 },
+{ num: [4],        id: "flower_orchard",       cost: 2,    color: BLUE_CARD,      industry: "floral",         value: 1,   supply: 6 },
+{ num: [5],        id: "forest",               cost: 3,    color: BLUE_CARD,      industry: "mech",           value: 1,   supply: 6 },
+{ num: [6],        id: "flower_shop",          cost: 1,    color: GREEN_CARD,     industry: "floral",         value: 1,   supply: 6, sources: "floral" },
+{ num: [6],        id: "stadium",              cost: 6,    color: PURPLE_CARD,    industry: "",               value: 2,   supply: 6 },
+{ num: [7],        id: "pizza_joint",          cost: 1,    color: RED_CARD,       industry: "restaurant",     value: 1,   supply: 6,  sources: "cow" },
+{ num: [7],        id: "cheese_factory",       cost: 5,    color: GREEN_CARD,     industry: "cow",            value: 1,   supply: 6,  sources: "" },
+{ num: [7],        id: "publisher",            cost: 5,    color: PURPLE_CARD,    industry: "",               value: 1,   supply: 6,  sources: ["restaurant, shop"], other_players: true },
+{ num: [8],        id: "furniture_factory",    cost: 3,    color: GREEN_CARD,     industry: "mech",           value: 1,   supply: 6,  sources: "mech" },
+{ num: [8],        id: "mackeral_boat",        cost: 2,    color: BLUE_CARD,      industry: "boat",           value: 3,   supply: 6,  sources: "mech", requires: "harbor" },
+{ num: [8,9],      id: "tax_office",           cost: 4,    color: PURPLE_CARD,    industry: "",               value: 0.5, supply: 6,  sources: "", other_players: true, minimum_coins: 10 },
+{ num: [9,10],     id: "family_restaurant",    cost: 3,    color: RED_CARD,       industry: "restaurant",     value: 2,   supply: 6 },
+{ num: [10],       id: "apple_orchard",        cost: 3,    color: GREEN_CARD,     industry: "cow",            value: 1,   supply: 6,  sources: "cow" },
+{ num: [11,12],    id: "fruit_and_vegetable_market", cost: 2,  color: GREEN_CARD,     industry: "factory",    value: 2,   supply: 6,  sources: "restaurant" },
+{ num: [12,13],    id: "food_warehouse",       cost: 2,    color: GREEN_CARD,     industry: "factory",        value: 2,   supply: 6,  sources: "restaurant" },
+{ num: [12,13,14], id: "tuna_boat",            cost: 5,    color: BLUE_CARD,      industry: "ship",           value: "s", supply: 6, requires: "harbor" }
 ]
 
 var players = []
@@ -153,10 +185,98 @@ function startGame(numPlayers) {
 }
 
 function initPlayers(numPlayers) {
+    // clear out any old players
     players = []
+
     for (var i = 0; i < numPlayers; i++) {
-        players.push(player)
+        players.push({
+            num_dice: 1,
+            landmarks: {
+                city_hall: { id: "city_hall", active: true, cost: 0 },
+                harbor: { id: "harbor", active: false, cost: 2 },
+                train_station: { id: "train_station", active: false, cost: 4 },
+                shopping_mall: { id: "shopping_mall", active: false, cost: 10 },
+                amusement_park: { id: "amusement_park", active: false, cost: 16 },
+                moon_tower: { id: "moon_tower", active: false, cost: 22 },
+                airport: {id: "airport",  active: false, cost: 30 }
+            },
+            coins: 3,
+            cards: []
+        });
+
+        var pd = '';
+        if(players.length == 1 || players.length % 3 == 0) {
+            pd = '<div class="left"></div>';
+        } else {
+            pd = '<div class="right"></div>';
+        }
+        var pd = $(pd);
+        $('#player-sections').append($(pd));
+
+        var ps = '' +
+        '<section class="player-section">' +
+            '<p>Player ' + (i+1) + ' Coins: <span id="p'+i+'-coins">0</span></p>' +
+            '<section class="p-landmarks" id="p'+i+'-landmarks">' +
+                '<p>Landmarks</p>' +
+            '</section>' +
+            '<section class="p-establishments" id="p'+i+'-establishments">' +
+                '<p>Establishments</p>' +
+            '</section>' +
+        '</section>';
+
+        pd.append($(ps));
+
+        addPlayerCard(i, "wheat_field")
+        addPlayerCard(i, "bakery")
     }
+}
+
+function addPlayerCard(playerIndex, cardId) {
+    var card = cloneCard(findCard(cardId));
+    card['count'] = 1;
+    var player = players[playerIndex];
+    var numCards = players[playerIndex].cards.length;
+
+    // see if the player already has one of these cards
+    var fc = players[playerIndex].cards.filter(function(x){
+        return x.id.indexOf(cardId) >= 0;
+    });
+
+    // have already ?
+    if (fc.length > 0) {
+        for (var i = 0; i < numCards; i++) {
+            if (players[playerIndex].cards[i].id.indexOf(cardId) >= 0) {
+                players[playerIndex].cards[i]['count'] += 1;
+                break;
+            }
+        }
+    } else {
+        players[playerIndex].cards.push(card);
+        sortPlayerCards(playerIndex);
+    }
+
+}
+
+function cloneCard(card) {
+    var obj = {}
+    var keys = Object.keys(card);
+    for (var i = 0; i < keys.length; i++) {
+        obj[keys[i]] = card[keys[i]];
+    }
+    return obj;
+}
+
+function findCard(cardId) {
+    return cards.filter(function(x) { return x.id.indexOf(cardId) >= 0; })[0];
+}
+
+function sortPlayerCards(player) {
+    var c = players[player].cards;
+    players[player].cards = c.sort(function(a, b) {
+        var aT = a.num.reduce(getSum)
+        var bT = b.num.reduce(getSum)
+        return aT < bT ? -1 : aT > bT ? 1 : 0
+    });
 }
 
 function initPiles() {
@@ -189,12 +309,12 @@ function initDecks() {
 
     var numCards = cards.length;
     for (var i = 0; i < numCards; i++) {
-        if (cards[i].num.reduce(getSum) <= 6 && cards[i].color.indexOf("purple") < 0) {
+        if (cards[i].num.reduce(getSum) <= 6 && cards[i].color != PURPLE_CARD) {
             for (var n = 0; n < cards[i].supply; n++) {
                 decks[0].push(cards[i])
-            }            
+            }
         }
-        else if (cards[i].color.indexOf("purple") < 0) {
+        else if (cards[i].color != PURPLE_CARD) {
             for (var n = 0; n < cards[i].supply; n++) {
                 decks[1].push(cards[i])
             }            
@@ -219,6 +339,19 @@ function initDecks() {
 }
 
 // Utility functions
+function outputMessage(msg) {
+    var old = $('#msgbox').text()
+    var lines = old.split('\n');
+    // var maxLines = 4;
+    // while (lines.length > maxLines) {
+    //     console.log('shifting');
+    //     lines.shift();
+    // }
+    lines.push(msg);
+    $('#msgbox').text(lines.join('\n'));
+    $('#msgbox').scrollTop(lines.length * 20)
+}
+
 function intersect(a, b) {
   return a.filter(Set.prototype.has, new Set(b));
 }
@@ -258,20 +391,19 @@ function canFlip(deck) {
             return true
         }
     }
-      
+
     return false
 }
 
 function nextCard(deck) {
     if(!canFlip(deck)) {
-        console.log("can't flip, piles are full.")
+        outputMessage("can't flip, piles are full.")
         return false
     }
 
     var card = decks[deck].shift();
     for (var i = 0; i < piles[deck].length; i++) {
         if (piles[deck][i].length > 0) {
-//            console.log("attempting match", piles[deck][i][0].id, card.id)
             if(piles[deck][i][0].id.indexOf(card.id) >= 0) {
                 piles[deck][i].push(card);
                 redrawGame();
@@ -287,44 +419,57 @@ function nextCard(deck) {
 }
 
 function createCard(options) {
-//    console.log(options)
     var d;
     var name = options.card.id.split('_').join(' ')
     if (options.pile) {
-        d = '<div class="card topcard ' + options.card.color + '" onclick="takeCard(' + options.y + ',' + options.x + ')"><div class="face"><p>'+ name +'<br><br>Cost: ' + options.card.cost + '<br><br>Die: ' + options.card.num.join(', ') + '</p></div></div>';
+        d = '<div class="card topcard ' + colorString(options.card.color) + '" onclick="takeCard(' + options.y + ',' + options.x + ')"><div class="face"><p>'+ name +'<br><br>Cost: ' + options.card.cost + '<br><br>Die: ' + options.card.num.join(', ') + '</p></div></div>';
     } else if (options.landmark) {
         d = '<div class="card topcard yellow"><div class="face"><div class="face"><p>'+ name +'<br><br>Cost: ' + options.card.cost + '</p></div></div>';
     } else {
-        d = '<div class="card topcard ' + options.card.color + '"><div class="face"><div class="face"><p>'+ name +'<br><br>Cost: ' + options.card.cost + '<br><br>Die: ' + options.card.num.join(', ') + '</p></div></div>';
+        var count = '';
+        if (typeof(options.card['count']) !== "undefined" && options.card['count'] > 1) {
+            count = '<div class="card-count">' + options.card['count'] + '</div>';
+        }
+        d = '<div class="card topcard ' + colorString(options.card.color) + '"><div class="face"><div class="face"><p>'+ name +'<br><br>Cost: ' + options.card.cost + '<br><br>Die: ' + options.card.num.join(', ') + '</p></div>' + count + '</div>';
     }
     return d;
+}
+
+function colorString(color) {
+    var result = "";
+    switch(color) {
+        case RED_CARD:
+            result = "red";
+            break;
+        case GREEN_CARD:
+            result = "green";
+            break;
+        case PURPLE_CARD:
+            result = "purple";
+            break;
+        case BLUE_CARD:
+            result = "blue";
+            break;
+    }
+    return result;
 }
 
 function takeCard(y, x) {
     var card = piles[y][x][0];
     if (players[activePlayer].coins >= card.cost) {
-        var numCards = players[activePlayer].cards.length;
-        var added = false;
         var card = piles[y][x].shift();
         players[activePlayer].coins -= card.cost;
-        for (var i = 0; i < numCards; i++) {
-            var pCard = players[activePlayer].cards[i];
-            if (pCard.id.indexOf(piles[y][x].id) < 0) {
-                var common = intersect(pCard.num, piles[y][x].num)
-                if (common.length === 0) {
-                    players[activePlayer].cards.splice(i, 0, card);
-                    added = true;
-                    break;
-                }
-            }
-        }
-        if (!added) {
-            players[activePlayer].cards.push(card);
-        }
+        addPlayerCard(activePlayer, card.id);
         dealCards(true)
     } else {
-        console.log('player' + activePlayer + ' cannot afford this card. Its cost is ' + card.cost + ' and you only have ' + players[activePlayer].coins);
+        outputMessage('player' + (activePlayer+1) + ' cannot afford this card. Its cost is ' + card.cost + ' and you only have ' + players[activePlayer].coins);
     }
+}
+
+function endTurn() {
+    activePlayer += 1;
+    if (activePlayer >= players.length)
+        activePlayer = 0;
 }
 
 // drawing
@@ -335,7 +480,6 @@ function redrawGame() {
     for (var y = 0; y < piles.length; y++) {
         for (var x = 0; x < piles[y].length; x++) {
             for (var i = 0; i < piles[y][x].length; i++) {
-//                console.log("card " + y + "," + x + "," + i + ": ", piles[y][x][i])
                 var card = piles[y][x][i];
                 var d = $(createCard({
                     y: y,
@@ -379,10 +523,21 @@ function redrawGame() {
 }
 
 // Dice functions
+function onRoll() {
+    endTurn();
+    outputMessage('Player' + (activePlayer+1) + ' is rolling ' + players[activePlayer].num_dice + ' dice.');
+    var roll = rollDice(players[activePlayer].num_dice);
+    for(var i = 0; i < roll.length; i++) {
+        $('#die' + (i+1)).text(roll[i]);
+    }
+    // assume for now that the player can't choose their dice yet
+    processRoll(roll.reduce(getSum));
+}
+
 function rollDice(numDice) {
     var dice = []
     for (var i = 0; i < numDice; i++) {
-        dice += Math.floor(Math.random() * ((6 - 1) + 1) + 1)
+        dice.push(Math.floor(Math.random() * ((6 - 1) + 1) + 1))
     }
     return dice
 }
@@ -391,8 +546,59 @@ function chooseDice(rollResult) {
     return shift(rollResult)
 }
 
+function processRoll(rollTotal) {
+
+    // process applicable red cards for activePlayer
+    outputMessage("processing red cards");
+    for (var i = 0; i < players.length; i++) {
+        if(activePlayer != i) {
+            for (var c = 0; c < players[i].cards.length; c++) {
+                if (players[i].cards[c].color == RED_CARD && players[i].cards[c].num.indexOf(rollDice) >= 0) {
+                    var name = players[i].cards[c].id.split('_').join(' ')
+                    outputMessage("processing " + name + " against Player " + (activePlayer+1));
+                    transferCoins(activePlayer, i, players[i].cards[c].value);
+                }
+            }
+        }
+    }
+
+    // process blue cards for all players
+    outputMessage("processing blue cards");
+    for (var i = 0; i < players.length; i++) {
+        for (var c = 0; c < players[i].cards.length; c++) {
+            if (players[i].cards[c].color == BLUE_CARD && players[i].cards[c].num.indexOf(rollTotal) >= 0) {
+                var name = players[i].cards[c].id.split('_').join(' ')
+                outputMessage("processing " + name + " for Player " + i + ", +" + players[i].cards[c].value);
+                players[i].coins += players[i].cards[c].value;
+            }
+        }
+    }
+
+    // process green cards for activePlayer
+    outputMessage("processing green cards");
+    var cards = players[activePlayer].cards;
+    for (var c = 0; c < cards.length; c++) {
+        if (cards[c].color == GREEN_CARD && cards[c].num.indexOf(rollTotal) >= 0) {
+            var name = cards[c].id.split('_').join(' ')
+            outputMessage("processing " + name + " for Player " + (i+1) + ", +" + cards[c].value);
+            players[activePlayer].coins += cards[c].value;
+        }
+    }
+    redrawGame();
+
+}
+
+function transferCoins(fromPlayer, toPlayer, numCoins) {
+    numCoins = players[fromPlayer].coins < numCoins ? players[fromPlayer].coins : numCoins
+    players[fromPlayer].coins -= numCoins;
+    players[toPlayer].coins += numCoins;
+    outputMessage("Player " + (activePlayer+1) + " paid " + numCoins + " coins to Player " + (i+1));
+
+}
+
 // init game
-startGame(1);
+startGame(2);
+endTurn();
 
 </script>
 </html>
