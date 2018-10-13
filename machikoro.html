@@ -99,6 +99,7 @@
             min-height: 200px;
             height: 200px;
         }
+        .active-player { background-color: rgb(231, 231, 231); }
     </style>
     <body>
         <h2>Machi Koro</h2>
@@ -214,7 +215,7 @@ function initPlayers(numPlayers) {
         $('#player-sections').append($(pd));
 
         var ps = '' +
-        '<section class="player-section">' +
+        '<section id="p' + (i+1) + '-section" class="player-section">' +
             '<p>Player ' + (i+1) + ' Coins: <span id="p'+i+'-coins">0</span></p>' +
             '<section class="p-landmarks" id="p'+i+'-landmarks">' +
                 '<p>Landmarks</p>' +
@@ -467,9 +468,14 @@ function takeCard(y, x) {
 }
 
 function endTurn() {
+    $('.active-player').removeClass('active-player');
     activePlayer += 1;
     if (activePlayer >= players.length)
         activePlayer = 0;
+
+
+
+    $('#p'+(activePlayer+1)+'-section').addClass('active-player');
 }
 
 // drawing
@@ -552,11 +558,16 @@ function processRoll(rollTotal) {
     outputMessage("processing red cards");
     for (var i = 0; i < players.length; i++) {
         if(activePlayer != i) {
-            for (var c = 0; c < players[i].cards.length; c++) {
-                if (players[i].cards[c].color == RED_CARD && players[i].cards[c].num.indexOf(rollDice) >= 0) {
-                    var name = players[i].cards[c].id.split('_').join(' ')
-                    outputMessage("processing " + name + " against Player " + (activePlayer+1));
-                    transferCoins(activePlayer, i, players[i].cards[c].value);
+            console.log('not active', activePlayer, i);
+            var rc = players[i].cards.filter(function(x){ return x.color == RED_CARD; });
+            console.log('rc', rc);
+            if (rc && rc.length > 0) {
+                for (var c = 0; c < rc.length; c++) {
+                    if (rc[c].num.indexOf(rollDice) >= 0) {
+                        var name = rc[c].id.split('_').join(' ')
+                        outputMessage("processing " + name + " against Player " + (activePlayer+1));
+                        transferCoins(activePlayer, i, rc[c].value);
+                    }
                 }
             }
         }
