@@ -179,6 +179,120 @@ var players = []
 var decks = []
 var piles = []
 
+
+class Card {
+    constructor(card) {
+        this._options = {};
+        var keys = Object.keys(card);
+        for (var i = 0; i < keys.length; i++) {
+            this._options[keys[i]] = card[keys[i]];
+        }
+        this._options.count = 1;
+    }
+
+    // getters
+    getCost() { return this._options.cost; }
+    getCount() { return this._options.count; }
+    getColor() { return this._options.color; }
+
+    matchesId(id) { return this._options.id.indexOf(id) >= 0; }
+    isColor(color) { return this._options.color === color; }
+    rollMatches(rollTotal) { return this._options.num.indexOf(rollTotal) >= 0; }
+
+    getTotalCoins() {
+        return this._options.value * this._options.count;
+    }
+}
+
+class Player {
+    constructor(playerId) {
+        this._name = "Player" + playerId;
+        this._numDice = 1;
+        this._landmarks = {
+            city_hall: { id: "city_hall", active: true, cost: 0 },
+            harbor: { id: "harbor", active: false, cost: 2 },
+            train_station: { id: "train_station", active: false, cost: 4 },
+            shopping_mall: { id: "shopping_mall", active: false, cost: 10 },
+            amusement_park: { id: "amusement_park", active: false, cost: 16 },
+            moon_tower: { id: "moon_tower", active: false, cost: 22 },
+            airport: {id: "airport",  active: false, cost: 30 }
+        };
+        this._coins = 3;
+        this._cards = [];
+    }
+
+    addCoins(num) { this._coins += num; }
+    subtractCoins(num) { this._coins -= num; }
+    getCoinCount() { return this._coins; }
+
+    getNumDice() { return this._numDice; }
+
+    addEstablishment(card) {
+        // see if we have one already
+        var added = false;
+        for(var i = 0; i < this._cards.length; i++) {
+            if(this._cards[i].matchesId(card.id)) {
+                // we do, increase its count
+                this._cards[i]._options.count += 1;
+                added = true;
+                break;
+            }
+        }
+
+        if (!added) {
+            this._cards.push(new Card(card));
+        }
+
+        // update our card order
+        this.sortCards();
+    }
+
+    sortCards() {
+        var c = this._cards;
+        this._cards = c.sort(function(a, b) {
+            var aT = a._options.num.reduce(getSum)
+            var bT = b._options.num.reduce(getSum)
+            return aT < bT ? -1 : aT > bT ? 1 : 0
+        });
+    }
+
+    processRedCards(activePlayer, rollTotal) {
+        var rc = this._cards.filter(function(x){ return x.isColor(RED_CARD) && x.rollMatches(rollTotal); });
+        if (rc && rc.length > 0) {
+            for (var c = 0; c < rc.length; c++) {
+                var name = rc[c]._options.id.split('_').join(' ');
+                outputMessage("processing " + name + " against Player " + (activePlayer+1));
+                var totalCoins = rc[c].getTotalCoins();
+                players[activePlayer].subtractCoins(totalCoins);
+                this.addCoins(totalCoins);
+            }
+        }
+    }
+
+    processBlueCards(rollTotal) {
+        for (var c = 0; c < this._cards.length; c++) {
+            if(this._cards[c].isColor(BLUE_CARD) && this._cards[c].rollMatches(rollTotal)) {
+                var name = this._cards[c]._options.id.split('_').join(' ')
+                var additionalCoins = this._cards[c].getTotalCoins();
+                outputMessage("processing " + name + " for Player " + this._name);
+                this.addCoins(additionalCoins);
+            }
+        }        
+    }
+
+    processGreenCards(rollTotal) {
+        for (var c = 0; c < this._cards.length; c++) {
+            if(this._cards[c].isColor(GREEN_CARD) && this._cards[c].rollMatches(rollTotal)) {
+                var name = this._cards[c]._options.id.split('_').join(' ')
+                var additionalCoins = this._cards[c].getTotalCoins();
+                outputMessage("processing " + name + " for Player " + this._name);
+                this.addCoins(additionalCoins);
+            }
+        }        
+    }
+}
+
+
 function startGame(numPlayers) {
     initPlayers(numPlayers)
     initDecks()
@@ -190,22 +304,15 @@ function initPlayers(numPlayers) {
     players = []
 
     for (var i = 0; i < numPlayers; i++) {
-        players.push({
-            num_dice: 1,
-            landmarks: {
-                city_hall: { id: "city_hall", active: true, cost: 0 },
-                harbor: { id: "harbor", active: false, cost: 2 },
-                train_station: { id: "train_station", active: false, cost: 4 },
-                shopping_mall: { id: "shopping_mall", active: false, cost: 10 },
-                amusement_park: { id: "amusement_park", active: false, cost: 16 },
-                moon_tower: { id: "moon_tower", active: false, cost: 22 },
-                airport: {id: "airport",  active: false, cost: 30 }
-            },
-            coins: 3,
-            cards: []
-        });
+        players.push(new Player(i+1));
+        addPlayerSection(i);
+        players[i].addEstablishment(findCard("wheat_field"))
+        players[i].addEstablishment(findCard("bakery"))
+    }
+}
 
-        var pd = '';
+function addPlayerSection(playerIndex) {
+    var pd = '';
         if(players.length == 1 || players.length % 3 == 0) {
             pd = '<div class="left"></div>';
         } else {
@@ -215,69 +322,21 @@ function initPlayers(numPlayers) {
         $('#player-sections').append($(pd));
 
         var ps = '' +
-        '<section id="p' + (i+1) + '-section" class="player-section">' +
-            '<p>Player ' + (i+1) + ' Coins: <span id="p'+i+'-coins">0</span></p>' +
-            '<section class="p-landmarks" id="p'+i+'-landmarks">' +
+        '<section id="p' + (playerIndex+1) + '-section" class="player-section">' +
+            '<p>Player ' + (playerIndex+1) + ' Coins: <span id="p'+playerIndex+'-coins">0</span></p>' +
+            '<section class="p-landmarks" id="p'+playerIndex+'-landmarks">' +
                 '<p>Landmarks</p>' +
             '</section>' +
-            '<section class="p-establishments" id="p'+i+'-establishments">' +
+            '<section class="p-establishments" id="p'+playerIndex+'-establishments">' +
                 '<p>Establishments</p>' +
             '</section>' +
         '</section>';
 
-        pd.append($(ps));
-
-        addPlayerCard(i, "wheat_field")
-        addPlayerCard(i, "bakery")
-    }
-}
-
-function addPlayerCard(playerIndex, cardId) {
-    var card = cloneCard(findCard(cardId));
-    card['count'] = 1;
-    var player = players[playerIndex];
-    var numCards = players[playerIndex].cards.length;
-
-    // see if the player already has one of these cards
-    var fc = players[playerIndex].cards.filter(function(x){
-        return x.id.indexOf(cardId) >= 0;
-    });
-
-    // have already ?
-    if (fc.length > 0) {
-        for (var i = 0; i < numCards; i++) {
-            if (players[playerIndex].cards[i].id.indexOf(cardId) >= 0) {
-                players[playerIndex].cards[i]['count'] += 1;
-                break;
-            }
-        }
-    } else {
-        players[playerIndex].cards.push(card);
-        sortPlayerCards(playerIndex);
-    }
-
-}
-
-function cloneCard(card) {
-    var obj = {}
-    var keys = Object.keys(card);
-    for (var i = 0; i < keys.length; i++) {
-        obj[keys[i]] = card[keys[i]];
-    }
-    return obj;
+        pd.append($(ps));    
 }
 
 function findCard(cardId) {
     return cards.filter(function(x) { return x.id.indexOf(cardId) >= 0; })[0];
-}
-
-function sortPlayerCards(player) {
-    var c = players[player].cards;
-    players[player].cards = c.sort(function(a, b) {
-        var aT = a.num.reduce(getSum)
-        var bT = b.num.reduce(getSum)
-        return aT < bT ? -1 : aT > bT ? 1 : 0
-    });
 }
 
 function initPiles() {
@@ -312,22 +371,20 @@ function initDecks() {
     for (var i = 0; i < numCards; i++) {
         if (cards[i].num.reduce(getSum) <= 6 && cards[i].color != PURPLE_CARD) {
             for (var n = 0; n < cards[i].supply; n++) {
-                decks[0].push(cards[i])
+                decks[0].push(cards[i]);
             }
         }
         else if (cards[i].color != PURPLE_CARD) {
             for (var n = 0; n < cards[i].supply; n++) {
-                decks[1].push(cards[i])
+                decks[1].push(cards[i]);
             }            
         }
         else {
             for (var n = 0; n < cards[i].supply; n++) {
-                decks[2].push(cards[i])
+                decks[2].push(cards[i]);
             }            
         }
     }
-
-//    console.log("decks pre shuffle", decks)
 
     for (i = 0; i < decks.length; i++) {
         var deck = decks[i];
@@ -335,19 +392,12 @@ function initDecks() {
         decks[i] = deck;
     }
 
-//    console.log("decks post shuffle", decks)
-
 }
 
 // Utility functions
 function outputMessage(msg) {
     var old = $('#msgbox').text()
     var lines = old.split('\n');
-    // var maxLines = 4;
-    // while (lines.length > maxLines) {
-    //     console.log('shifting');
-    //     lines.shift();
-    // }
     lines.push(msg);
     $('#msgbox').text(lines.join('\n'));
     $('#msgbox').scrollTop(lines.length * 20)
@@ -404,14 +454,14 @@ function nextCard(deck) {
 
     var card = decks[deck].shift();
     for (var i = 0; i < piles[deck].length; i++) {
-        if (piles[deck][i].length > 0) {
-            if(piles[deck][i][0].id.indexOf(card.id) >= 0) {
-                piles[deck][i].push(card);
+        if (piles[deck][i].length > 0) {            
+            if(piles[deck][i][0]._options.id.indexOf(card.id) >= 0) {
+                piles[deck][i].push(new Card(card));
                 redrawGame();
                 return true;
             }
         } else {
-            piles[deck][i].push(card);
+            piles[deck][i].push(new Card(card));
             redrawGame()
             return true
         }
@@ -421,17 +471,17 @@ function nextCard(deck) {
 
 function createCard(options) {
     var d;
-    var name = options.card.id.split('_').join(' ')
+    var name = options.card._options.id.split('_').join(' ')
     if (options.pile) {
-        d = '<div class="card topcard ' + colorString(options.card.color) + '" onclick="takeCard(' + options.y + ',' + options.x + ')"><div class="face"><p>'+ name +'<br><br>Cost: ' + options.card.cost + '<br><br>Die: ' + options.card.num.join(', ') + '</p></div></div>';
+        d = '<div class="card topcard ' + colorString(options.card.getColor()) + '" onclick="takeCard(' + options.y + ',' + options.x + ')"><div class="face"><p>'+ name +'<br><br>Cost: ' + options.card.getCost() + '<br><br>Die: ' + options.card._options.num.join(', ') + '</p></div></div>';
     } else if (options.landmark) {
-        d = '<div class="card topcard yellow"><div class="face"><div class="face"><p>'+ name +'<br><br>Cost: ' + options.card.cost + '</p></div></div>';
+        d = '<div class="card topcard yellow"><div class="face"><div class="face"><p>'+ name +'<br><br>Cost: ' + options.card._options.cost + '</p></div></div>';
     } else {
         var count = '';
-        if (typeof(options.card['count']) !== "undefined" && options.card['count'] > 1) {
-            count = '<div class="card-count">' + options.card['count'] + '</div>';
+        if (options.card.getCount() > 1) {
+            count = '<div class="card-count">' + options.card.getCount() + '</div>';
         }
-        d = '<div class="card topcard ' + colorString(options.card.color) + '"><div class="face"><div class="face"><p>'+ name +'<br><br>Cost: ' + options.card.cost + '<br><br>Die: ' + options.card.num.join(', ') + '</p></div>' + count + '</div>';
+        d = '<div class="card topcard ' + colorString(options.card.getColor()) + '"><div class="face"><div class="face"><p>'+ name +'<br><br>Cost: ' + options.card.getCost() + '<br><br>Die: ' + options.card._options.num.join(', ') + '</p></div>' + count + '</div>';
     }
     return d;
 }
@@ -457,13 +507,13 @@ function colorString(color) {
 
 function takeCard(y, x) {
     var card = piles[y][x][0];
-    if (players[activePlayer].coins >= card.cost) {
+    if (players[activePlayer].getCoinCount() >= card.getCost()) {
         var card = piles[y][x].shift();
-        players[activePlayer].coins -= card.cost;
-        addPlayerCard(activePlayer, card.id);
+        players[activePlayer].subtractCoins(card.getCost());
+        players[activePlayer].addEstablishment(findCard(card._options.id));
         dealCards(true)
     } else {
-        outputMessage('player' + (activePlayer+1) + ' cannot afford this card. Its cost is ' + card.cost + ' and you only have ' + players[activePlayer].coins);
+        outputMessage('player' + (activePlayer+1) + ' cannot afford this card. Its cost is ' + card.getCost() + ' and you only have ' + players[activePlayer].getCoinCount());
     }
 }
 
@@ -472,8 +522,6 @@ function endTurn() {
     activePlayer += 1;
     if (activePlayer >= players.length)
         activePlayer = 0;
-
-
 
     $('#p'+(activePlayer+1)+'-section').addClass('active-player');
 }
@@ -500,11 +548,11 @@ function redrawGame() {
     }
     for (var p = 0; p < players.length; p++) {
         // coins
-        $('#p' + p + '-coins').text(players[p].coins);
+        $('#p' + p + '-coins').text(players[p].getCoinCount());
 
         // cards
-        for (var c = 0; c < players[p].cards.length; c++) {
-            var card = players[p].cards[c];
+        for (var c = 0; c < players[p]._cards.length; c++) {
+            var card = players[p]._cards[c];
             var d = $(createCard({
                     card: card,
                     pile: false
@@ -514,13 +562,15 @@ function redrawGame() {
         }
 
         // landmarks
-        if (players[p].landmarks.city_hall.active) {
+        if (players[p]._landmarks.city_hall.active) {
             var d = $(createCard({
                 landmark: true,
                 card: {
-                    id: "city_hall",
-                    cost: players[p].landmarks.city_hall.cost,
-                    active: players[p].landmarks.city_hall.active
+                    _options: {
+                        id: "city_hall",
+                        cost: players[p]._landmarks.city_hall.cost,
+                        active: players[p]._landmarks.city_hall.active
+                    }
                 }
             }))
             $('#p' + p + '-landmarks').append(d);
@@ -531,8 +581,8 @@ function redrawGame() {
 // Dice functions
 function onRoll() {
     endTurn();
-    outputMessage('Player' + (activePlayer+1) + ' is rolling ' + players[activePlayer].num_dice + ' dice.');
-    var roll = rollDice(players[activePlayer].num_dice);
+    outputMessage('Player' + (activePlayer+1) + ' is rolling ' + players[activePlayer].getNumDice() + ' dice.');
+    var roll = rollDice(players[activePlayer].getNumDice());
     for(var i = 0; i < roll.length; i++) {
         $('#die' + (i+1)).text(roll[i]);
     }
@@ -557,44 +607,20 @@ function processRoll(rollTotal) {
     // process applicable red cards for activePlayer
     outputMessage("processing red cards");
     for (var i = 0; i < players.length; i++) {
-        if(activePlayer != i) {
-            var rc = players[i].cards.filter(function(x){ return x.color == RED_CARD; });
-            if (rc && rc.length > 0) {
-                for (var c = 0; c < rc.length; c++) {
-                    if (rc[c].num.indexOf(rollTotal) >= 0) {
-                        var name = rc[c].id.split('_').join(' ')
-                        outputMessage("processing " + name + " against Player " + (activePlayer+1));
-                        transferCoins(activePlayer, i, rc[c].value * getCount(rc[c]));
-                    }
-                }
-            }
+        if (activePlayer != i) {
+            players[i].processRedCards(activePlayer, rollTotal);
         }
     }
 
     // process blue cards for all players
     outputMessage("processing blue cards");
     for (var i = 0; i < players.length; i++) {
-        for (var c = 0; c < players[i].cards.length; c++) {
-            if (players[i].cards[c].color == BLUE_CARD && players[i].cards[c].num.indexOf(rollTotal) >= 0) {
-                var name = players[i].cards[c].id.split('_').join(' ')
-                var additionalCoins = players[i].cards[c].value * getCount(players[i].cards[c]);
-                outputMessage("processing " + name + " for Player " + (i+1) + ", +" + additionalCoins);
-                players[i].coins += additionalCoins;
-            }
-        }
+        players[i].processBlueCards(rollTotal);
     }
 
     // process green cards for activePlayer
     outputMessage("processing green cards");
-    var cards = players[activePlayer].cards;
-    for (var c = 0; c < cards.length; c++) {
-        if (cards[c].color == GREEN_CARD && cards[c].num.indexOf(rollTotal) >= 0) {
-            var name = cards[c].id.split('_').join(' ')
-            var additionalCoins = (cards[c].value * getCount(players[activePlayer].cards[c]));
-            outputMessage("processing " + name + " for Player " + (activePlayer + 1) + ", +" + additionalCoins);
-            players[activePlayer].coins += additionalCoins;
-        }
-    }
+    players[activePlayer].processGreenCards(rollTotal);
     redrawGame();
 
 }
@@ -606,8 +632,8 @@ function getCount(card) {
 
 function transferCoins(fromPlayer, toPlayer, numCoins) {
     numCoins = players[fromPlayer].coins < numCoins ? players[fromPlayer].coins : numCoins
-    players[fromPlayer].coins -= numCoins;
-    players[toPlayer].coins += numCoins;
+    players[fromPlayer].subtractCoins(numCoins);
+    players[toPlayer].addCoins(numCoins);
     outputMessage("Player " + (activePlayer+1) + " paid " + numCoins + " coins to Player " + (toPlayer+1));
 
 }
